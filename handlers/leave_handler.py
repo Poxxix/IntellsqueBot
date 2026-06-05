@@ -26,7 +26,7 @@ def format_leave_type(lt: str) -> str:
     }
     return types.get(lt, lt)
 
-# Send request to all Admins and Approvers
+# Send request to all Admins and Approvers (in their DM only)
 async def send_to_approvers(context: ContextTypes.DEFAULT_TYPE, req: LeaveRequest, applicant_name: str):
     async with db_session() as session:
         stmt = select(User).where(User.role.in_(['admin', 'approver']))
@@ -37,11 +37,12 @@ async def send_to_approvers(context: ContextTypes.DEFAULT_TYPE, req: LeaveReques
     type_str = format_leave_type(req.leave_type)
     
     text = (
-        f"🔔 **ĐƠN XIN NGHỈ PHÉP MỚI** (Mã đơn: #{req.id})\n\n"
-        f"👤 **Thành viên:** {applicant_name}\n"
+        f"📋 **ĐƠN XIN NGHỈ PHÉP MỚI** (Mã đơn: #{req.id})\n\n"
+        f"👤 **Nhân viên:** {applicant_name}\n"
         f"🏖 **Loại nghỉ:** {type_str}\n"
-        f"📅 **Thời gian:** {date_str}\n"
-        f"📝 **Lý do:** {req.reason or 'Không có lý do'}\n\n"
+        f"📅 **Ngày:** {date_str}\n"
+        f"📝 **Lý do:** {req.reason or 'Không có lý do'}\n"
+        f"⏳ **Trạng thái:** Chờ duyệt\n\n"
         f"Vui lòng phê duyệt:"
     )
     
@@ -49,6 +50,9 @@ async def send_to_approvers(context: ContextTypes.DEFAULT_TYPE, req: LeaveReques
         [
             InlineKeyboardButton("✅ Duyệt", callback_data=f"leave_approve:{req.id}"),
             InlineKeyboardButton("❌ Từ chối", callback_data=f"leave_reject:{req.id}")
+        ],
+        [
+            InlineKeyboardButton("📁 Xuất CSV", callback_data=f"leave_csv_single:{req.id}")
         ]
     ]
     
@@ -63,28 +67,28 @@ async def send_to_approvers(context: ContextTypes.DEFAULT_TYPE, req: LeaveReques
             )
             sent_count += 1
         except Exception:
-            # Approver might not have started DM with bot
             pass
     return sent_count
 
 async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Creates a leave request via command or quick menu."""
+    """Creates a leave request. Safe for group and private chats."""
     if not update.message or not update.effective_chat:
         return
         
     chat_id = update.effective_chat.id
+    is_group = update.effective_chat.type in ['group', 'supergroup']
     user = update.effective_user
     user_id = user.id
     args = context.args
+    message_text = update.message.text
 
-    # Check if user exists in database
+    # Auto-register member
     async with db_session() as session:
         stmt_u = select(User).where(User.telegram_id == user_id)
         res_u = await session.execute(stmt_u)
         db_user = res_u.scalar_one_or_none()
         
         if not db_user:
-            # Auto-register as member
             db_user = User(
                 telegram_id=user_id,
                 display_name=user.full_name,
@@ -95,37 +99,21 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await session.flush()
             
     if not args:
-        # Show Quick Reply Menu
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-        
-        text = (
-            f"🏖 **ĐĂNG KÝ XIN NGHỈ PHÉP**\n\n"
-            f"Bạn có thể xin nghỉ nhanh bằng cách gõ lệnh kèm các tham số:\n"
-            f"• `/xinnghi sang YYYY-MM-DD [lý do]` (Nghỉ sáng)\n"
-            f"• `/xinnghi chieu YYYY-MM-DD [lý do]` (Nghỉ chiều)\n"
-            f"• `/xinnghi ngay YYYY-MM-DD [lý do]` (Nghỉ cả ngày)\n"
-            f"• `/xinnghi tu YYYY-MM-DD den YYYY-MM-DD [lý do]` (Nghỉ nhiều ngày)\n\n"
-            f"Hoặc chọn các nút bấm bên dưới để gửi đơn xin nghỉ nhanh hôm nay/ngày mai:"
-        )
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("🏖 Sáng nay", callback_data=f"leave_quick:sang:{today_str}"),
-                InlineKeyboardButton("🏖 Chiều nay", callback_data=f"leave_quick:chieu:{today_str}"),
-                InlineKeyboardButton("🏖 Cả ngày nay", callback_data=f"leave_quick:ngay:{today_str}")
-            ],
-            [
-                InlineKeyboardButton("🏖 Sáng mai", callback_data=f"leave_quick:sang:{tomorrow_str}"),
-                InlineKeyboardButton("🏖 Chiều mai", callback_data=f"leave_quick:chieu:{tomorrow_str}"),
-                InlineKeyboardButton("🏖 Cả ngày mai", callback_data=f"leave_quick:ngay:{tomorrow_str}")
-            ]
-        ]
-        
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        if is_group:
+            # If in group, send instruction and ask them to check DM
+            await update.message.reply_text("🏖 Vui lòng kiểm tra tin nhắn riêng (DM) với Bot để gửi đơn xin nghỉ nhanh.")
+            
+            # Send the menu to DM
+            try:
+                await send_quick_menu(context.bot, user_id)
+            except Exception:
+                await update.message.reply_text("⚠️ Bot không thể nhắn tin riêng cho bạn. Vui lòng mở chat với Bot và gõ `/start` trước.")
+        else:
+            # If in private chat, send the quick menu directly
+            await send_quick_menu(context.bot, user_id)
         return
 
-    # Parse args
+    # Parse arguments: sang|chieu|ngay|tu
     first_arg = args[0].lower()
     leave_type = "ngay"
     start_date = ""
@@ -133,7 +121,6 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reason = ""
 
     if first_arg == "tu":
-        # tu YYYY-MM-DD den YYYY-MM-DD [reason]
         if len(args) < 4 or args[2].lower() != "den":
             await update.message.reply_text("❌ Cú pháp sai. Hãy dùng: `/xinnghi tu YYYY-MM-DD den YYYY-MM-DD [lý do]`")
             return
@@ -153,7 +140,6 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Loại nghỉ không hợp lệ. Hãy dùng `sang`, `chieu`, `ngay`, hoặc `tu`.")
         return
 
-    # Validate dates
     if not is_valid_date(start_date) or not is_valid_date(end_date):
         await update.message.reply_text("❌ Định dạng ngày không hợp lệ. Vui lòng điền dạng YYYY-MM-DD (Ví dụ: 2026-06-06).")
         return
@@ -193,9 +179,8 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status='pending'
         )
         session.add(req)
-        await session.flush() # get ID
+        await session.flush()
 
-        # Audit Log
         session.add(AuditLog(
             actor_id=user_id,
             action="submit_leave",
@@ -206,6 +191,10 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Notify approvers
         sent_count = await send_to_approvers(context, req, db_user.display_name)
         
+    if is_group:
+        # Hiding reason and sensitive info in group
+        await update.message.reply_text("✅ Đã nhận yêu cầu, kiểm tra DM.")
+    else:
         ack = (
             f"✅ **Đã gửi đơn xin nghỉ phép mã #{req.id}!**\n\n"
             f"• Loại nghỉ: `{format_leave_type(leave_type)}`\n"
@@ -213,16 +202,43 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         if reason:
             ack += f"• Lý do: _{reason}_\n"
-            
         if sent_count > 0:
-            ack += f"\n✉️ Đã gửi thông báo đến `{sent_count}` cấp quản lý. Đang chờ phê duyệt..."
+            ack += f"\n✉️ Đang chờ `{sent_count}` cấp quản lý phê duyệt..."
         else:
-            ack += f"\n⚠️ Admin/Approver chưa chat với Bot. Vui lòng báo trực tiếp cho Admin."
-            
+            ack += f"\n⚠️ Admin/Approver chưa kết nối bot. Vui lòng báo trực tiếp cho Admin."
         await update.message.reply_text(ack, parse_mode="Markdown")
 
+async def send_quick_menu(bot, chat_id: int):
+    """Sends the quick leave menu to private DM."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    text = (
+        f"🏖 **ĐĂNG KÝ XIN NGHỈ PHÉP NHANH**\n\n"
+        f"Chọn một trong các nút bấm dưới đây để tạo đơn nghỉ nhanh hôm nay/ngày mai:"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🏖 Sáng nay", callback_data=f"leave_quick:sang:{today_str}"),
+            InlineKeyboardButton("🏖 Chiều nay", callback_data=f"leave_quick:chieu:{today_str}"),
+            InlineKeyboardButton("🏖 Cả ngày nay", callback_data=f"leave_quick:ngay:{today_str}")
+        ],
+        [
+            InlineKeyboardButton("🏖 Sáng mai", callback_data=f"leave_quick:sang:{tomorrow_str}"),
+            InlineKeyboardButton("🏖 Chiều mai", callback_data=f"leave_quick:chieu:{tomorrow_str}"),
+            InlineKeyboardButton("🏖 Cả ngày mai", callback_data=f"leave_quick:ngay:{tomorrow_str}")
+        ]
+    ]
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 async def handle_nghihomnay(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Shows all approved leave requests for today (hides reasons)."""
+    """Shows all approved leave requests today (strictly hides reasons)."""
     if not update.message:
         return
         
@@ -249,44 +265,77 @@ async def handle_nghihomnay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         date_str = f" (từ {l.start_date} đến {l.end_date})" if l.start_date != l.end_date else ""
         text += f"{idx+1}. **{l.user_name}** — {type_str}{date_str}\n"
         
+    # Strictly hide reasons!
     await update.message.reply_text(text, parse_mode="Markdown")
 
-async def handle_huy_nghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancels/deletes a leave request."""
-    if not update.message or not update.effective_user:
+async def handle_my_leave(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lists leave requests for the caller (Private DM only)."""
+    if not update.message or update.effective_chat.type != 'private':
+        if update.message:
+            await update.message.reply_text("❌ Lệnh này chỉ sử dụng được trong chat riêng tư (DM) với Bot.")
+        return
+        
+    user_id = update.effective_user.id
+    
+    async with db_session() as session:
+        stmt = select(LeaveRequest).where(
+            LeaveRequest.user_id == user_id
+        ).order_by(LeaveRequest.id.desc()).limit(10)
+        res = await session.execute(stmt)
+        requests = res.scalars().all()
+        
+    if not requests:
+        await update.message.reply_text("🏖 Bạn chưa tạo đơn xin nghỉ phép nào.")
+        return
+        
+    text = "🏖 **ĐƠN XIN NGHỈ PHÉP CỦA BẠN (10 đơn gần nhất)**\n\n"
+    for r in requests:
+        type_str = format_leave_type(r.leave_type)
+        date_str = r.start_date if r.start_date == r.end_date else f"từ {r.start_date} đến {r.end_date}"
+        
+        status_emoji = "⏳" if r.status == "pending" else "✅" if r.status == "approved" else "❌"
+        cancel_txt = f" /cancel_leave {r.id}" if r.status == "pending" else ""
+        
+        text += f"• **Đơn #{r.id}** — {type_str} ({date_str})\n"
+        text += f"   • Trạng thái: {status_emoji} `{r.status.upper()}`{cancel_txt}\n"
+        if r.reason:
+            text += f"   • Lý do: _{r.reason}_\n"
+        text += "\n"
+        
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+async def handle_cancel_leave(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancels a pending leave request (Private DM only)."""
+    if not update.message or update.effective_chat.type != 'private':
+        if update.message:
+            await update.message.reply_text("❌ Lệnh này chỉ sử dụng được trong chat riêng tư (DM) với Bot.")
         return
         
     user_id = update.effective_user.id
     args = context.args
     
     if not args or not args[0].isdigit():
-        await update.message.reply_text("💡 Cú pháp: `/huy_nghi <mã_đơn>`\nVí dụ: `/huy_nghi 5`")
+        await update.message.reply_text("💡 Cú pháp: `/cancel_leave <mã_đơn>`\nVí dụ: `/cancel_leave 5`")
         return
         
     req_id = int(args[0])
     
     async with db_session() as session:
-        # Check permissions (applicant or admin)
-        stmt_u = select(User).where(User.telegram_id == user_id)
-        res_u = await session.execute(stmt_u)
-        db_user = res_u.scalar_one_or_none()
-        
         req = await session.get(LeaveRequest, req_id)
         
         if not req:
             await update.message.reply_text(f"❌ Không tìm thấy đơn xin nghỉ mã #{req_id}.")
             return
             
-        if req.user_id != user_id and (not db_user or db_user.role != 'admin'):
-            await update.message.reply_text("❌ Bạn không có quyền hủy đơn xin nghỉ này (chỉ chủ đơn hoặc Admin mới được phép).")
+        if req.user_id != user_id:
+            await update.message.reply_text("❌ Bạn không có quyền hủy đơn xin nghỉ này.")
             return
             
-        if req.status in ['cancelled', 'rejected']:
-            await update.message.reply_text(f"❌ Đơn này đã ở trạng thái `{req.status}` từ trước.")
+        if req.status != 'pending':
+            await update.message.reply_text(f"❌ Đơn này đã được xử lý (trạng thái: `{req.status}`). Bạn không thể tự hủy.")
             return
             
         req.status = 'cancelled'
-        
         session.add(AuditLog(
             actor_id=user_id,
             action="cancel_leave",
@@ -294,21 +343,24 @@ async def handle_huy_nghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
             entity_id=req_id
         ))
         
-        await update.message.reply_text(f"✅ Đã hủy thành công đơn xin nghỉ mã #{req_id}.")
+    await update.message.reply_text(f"✅ Đã hủy thành công đơn xin nghỉ mã #{req_id}.")
 
 async def handle_leave_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles callback queries for leave approval/rejection and quick submits."""
+    """Handles callbacks for leave approvals, rejections, and quick submits."""
     query = update.callback_query
     await query.answer()
     
     data = query.data
     parts = data.split(":")
     action = parts[0]
-    
     user_id = query.from_user.id
     
+    if action in ["leave_csv_weekly", "leave_csv_monthly", "leave_csv_single"]:
+        from handlers.report_handler import handle_leave_csv_callback
+        await handle_leave_csv_callback(query, context)
+        return
+
     if action == "leave_quick":
-        # leave_quick:type:date
         leave_type = parts[1]
         date_str = parts[2]
         chat_id = query.message.chat.id if query.message else 0
@@ -364,17 +416,17 @@ async def handle_leave_callback(update: Update, context: ContextTypes.DEFAULT_TY
             
             sent_count = await send_to_approvers(context, req, db_user.display_name)
             
-            text = (
-                f"✅ **Đã gửi đơn xin nghỉ phép nhanh mã #{req.id}!**\n\n"
-                f"• Loại nghỉ: `{format_leave_type(leave_type)}`\n"
-                f"• Ngày nghỉ: `{date_str}`\n"
-            )
-            if sent_count > 0:
-                text += f"✉️ Chờ duyệt bởi `{sent_count}` quản lý..."
-            else:
-                text += f"⚠️ Admin/Approver chưa bắt đầu chat riêng với Bot."
-                
-            await query.edit_message_text(text, parse_mode="Markdown")
+        text = (
+            f"✅ **Đã gửi đơn xin nghỉ phép nhanh mã #{req.id}!**\n\n"
+            f"• Loại nghỉ: `{format_leave_type(leave_type)}`\n"
+            f"• Ngày nghỉ: `{date_str}`\n"
+        )
+        if sent_count > 0:
+            text += f"✉️ Chờ duyệt bởi `{sent_count}` quản lý..."
+        else:
+            text += f"⚠️ Admin/Approver chưa bắt đầu chat riêng với Bot."
+            
+        await query.edit_message_text(text, parse_mode="Markdown")
 
     elif action in ["leave_approve", "leave_reject"]:
         req_id = int(parts[1])
@@ -413,33 +465,43 @@ async def handle_leave_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 entity_id=req_id
             ))
             
-            # Edit manager's DM
-            status_symbol = "✅" if approved else "❌"
-            status_word = "ĐÃ DUYỆT" if approved else "BỊ TỪ CHỐI"
+        # Update Admin's view in DM (still show reason, but add export snapshot buttons)
+        status_symbol = "✅" if approved else "❌"
+        status_word = "ĐÃ DUYỆT" if approved else "BỊ TỪ CHỐI"
+        
+        date_str = req.start_date if req.start_date == req.end_date else f"từ {req.start_date} đến {req.end_date}"
+        type_str = format_leave_type(req.leave_type)
+        
+        text = (
+            f"{status_symbol} **ĐƠN XIN NGHỈ PHÉP {status_word}**\n\n"
+            f"👤 **Nhân viên:** {req.user_name}\n"
+            f"🏖 **Loại nghỉ:** {type_str}\n"
+            f"📅 **Thời gian:** {date_str}\n"
+            f"📝 **Lý do:** {req.reason or 'Không có lý do'}\n"
+            f"👤 **Người duyệt:** {db_user.display_name}\n"
+        )
+        
+        # Add automated snapshot export options
+        keyboard = [
+            [
+                InlineKeyboardButton("📁 Xuất CSV tuần này", callback_data="leave_csv_weekly"),
+                InlineKeyboardButton("📁 Xuất CSV tháng này", callback_data="leave_csv_monthly")
+            ]
+        ]
+        
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        # Notify Applicant
+        try:
+            msg = f"{status_symbol} Đơn xin nghỉ phép #{req.id} ({type_str} - {date_str}) của bạn đã được **{status_word.lower()}** bởi {db_user.display_name}."
+            await context.bot.send_message(chat_id=req.user_id, text=msg, parse_mode="Markdown")
+        except Exception:
+            pass
             
-            date_str = req.start_date if req.start_date == req.end_date else f"từ {req.start_date} đến {req.end_date}"
-            type_str = format_leave_type(req.leave_type)
-            
-            text = (
-                f"{status_symbol} **ĐƠN XIN NGHỈ PHÉP {status_word}**\n\n"
-                f"👤 **Thành viên:** {req.user_name}\n"
-                f"🏖 **Loại nghỉ:** {type_str}\n"
-                f"📅 **Thời gian:** {date_str}\n"
-                f"👤 **Người duyệt:** {db_user.display_name}\n"
-            )
-            await query.edit_message_text(text, parse_mode="Markdown")
-            
-            # Notify Applicant
+        # Broadcast short operational summary to group chat (hiding the reason!)
+        if approved and req.chat_id and req.chat_id < 0:
             try:
-                msg = f"{status_symbol} Đơn xin nghỉ phép #{req.id} ({type_str} - {date_str}) của bạn đã được **{status_word.lower()}** bởi {db_user.display_name}."
-                await context.bot.send_message(chat_id=req.user_id, text=msg, parse_mode="Markdown")
+                announce = f"📅 **{req.user_name}** nghỉ **{type_str.lower()}** ngày `{date_str}` — Đã duyệt ✅"
+                await context.bot.send_message(chat_id=req.chat_id, text=announce, parse_mode="Markdown")
             except Exception:
                 pass
-                
-            # Broadcast to group chat (hiding the reason!)
-            if approved and req.chat_id and req.chat_id < 0:
-                try:
-                    announce = f"📢 **Thông báo:** **{req.user_name}** sẽ **{type_str.lower()}** vào ngày `{date_str}` (đã được duyệt)."
-                    await context.bot.send_message(chat_id=req.chat_id, text=announce, parse_mode="Markdown")
-                except Exception:
-                    pass

@@ -39,22 +39,23 @@ from handlers.poll_handler import (
     handle_vote_callback,
     handle_react_callback
 )
-from handlers.kudos_handler import handle_kudos, handle_kudos_board
 from handlers.remind_handler import (
     handle_remind,
     handle_reminders,
     handle_rem_callback
 )
-from handlers.task_handler import handle_task, handle_mytask
 from handlers.welcome_handler import handle_welcome_config, handle_new_member
-from handlers.birthday_handler import (
-    handle_birthday,
-    handle_joined_set,
-    daily_birthday_greeting_job
-)
 from handlers.digest_handler import handle_digest, daily_digest_scheduler_job
 from handlers.admin_handler import handle_admin
 from handlers.report_handler import handle_report, handle_export
+from handlers.status_handler import handle_status, handle_team_status
+from handlers.info_handler import handle_info
+from handlers.feedback_handler import handle_feedback
+from handlers.dashboard_handler import (
+    handle_dashboard,
+    handle_pending,
+    handle_dashboard_callback
+)
 
 # Import background jobs
 from services.scheduler import check_and_trigger_reminders_job
@@ -133,24 +134,12 @@ def main():
     app.add_handler(CommandHandler("vote", handle_vote))
     app.add_handler(CommandHandler("react", handle_react))
     
-    # Kudos
-    app.add_handler(CommandHandler("kudos", handle_kudos))
-    app.add_handler(CommandHandler("kudos_board", handle_kudos_board))
-    
     # Reminders
     app.add_handler(CommandHandler("remind", handle_remind))
     app.add_handler(CommandHandler("reminders", handle_reminders))
     
-    # Tasks
-    app.add_handler(CommandHandler("task", handle_task))
-    app.add_handler(CommandHandler("mytask", handle_mytask))
-    
     # Welcome config
     app.add_handler(CommandHandler("welcome", handle_welcome_config))
-    
-    # Birthdays
-    app.add_handler(CommandHandler("birthday", handle_birthday))
-    app.add_handler(CommandHandler("joined", handle_joined_set))
     
     # Daily Digest
     app.add_handler(CommandHandler("digest", handle_digest))
@@ -159,12 +148,27 @@ def main():
     app.add_handler(CommandHandler("report", handle_report))
     app.add_handler(CommandHandler("export", handle_export))
 
+    # Team Status
+    app.add_handler(CommandHandler("status", handle_status))
+    app.add_handler(CommandHandler("team_status", handle_team_status))
+
+    # Info Hub
+    app.add_handler(CommandHandler("info", handle_info))
+
+    # Feedback
+    app.add_handler(CommandHandler("feedback", handle_feedback))
+
+    # Admin Dashboard
+    app.add_handler(CommandHandler("dashboard", handle_dashboard))
+    app.add_handler(CommandHandler("pending", handle_pending))
+
     # 4. Callback Query Handlers (Buttons click)
     app.add_handler(CallbackQueryHandler(handle_spin_callback, pattern="^spin_"))
     app.add_handler(CallbackQueryHandler(handle_leave_callback, pattern="^leave_"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern="^vote_"))
     app.add_handler(CallbackQueryHandler(handle_react_callback, pattern="^react_"))
     app.add_handler(CallbackQueryHandler(handle_rem_callback, pattern="^rem_"))
+    app.add_handler(CallbackQueryHandler(handle_dashboard_callback, pattern="^dash_"))
 
     # 5. Welcoming New Members Handler
     app.add_handler(ChatMemberHandler(handle_new_member, ChatMemberHandler.CHAT_MEMBER))
@@ -175,29 +179,12 @@ def main():
         # Run every 60 seconds (check reminders and daily digests)
         jq.run_repeating(check_and_trigger_reminders_job, interval=60, first=10)
         jq.run_repeating(daily_digest_scheduler_job, interval=60, first=15)
-        
-        # Parse timezone for run_daily
-        try:
-            from datetime import timezone, timedelta
-            # Simple offset parsing or pytz/zoneinfo
-            from zoneinfo import ZoneInfo
-            tz = ZoneInfo(TZ)
-        except Exception:
-            try:
-                import pytz
-                tz = pytz.timezone(TZ)
-            except Exception:
-                from datetime import timezone, timedelta
-                tz = timezone(timedelta(hours=7)) # Default GMT+7
-                
-        greet_time = datetime.time(hour=8, minute=30, second=0, tzinfo=tz)
-        jq.run_daily(daily_birthday_greeting_job, time=greet_time)
         print("Background jobs and schedulers initialized successfully.")
     else:
         print("WARNING: JobQueue is disabled. Background reminders and digests will not function.")
 
     # 7. Start polling bot
-    print("🚀 Python Office Bot v2.0 is starting... Press Ctrl+C to stop.")
+    print("🚀 Python Office Bot v3.0 is starting... Press Ctrl+C to stop.")
     app.run_polling()
 
 if __name__ == '__main__':

@@ -1,121 +1,128 @@
-from datetime import datetime
+import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from models.database import db_session
-from models.leave import LeaveRequest
-from models.spin import SpinHistory
-from models.reminder import Reminder
-from models.task import Task
-from handlers.leave_handler import format_leave_type
+from models.user import User
+from models.audit import AuditLog
 
-async def handle_status_homnay(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Summarizes the current day's status for the group."""
-    if not update.message or not update.effective_chat:
+async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Updates the user's operational status to either 'available' or 'no available'."""
+    if not update.message or not update.effective_user:
         return
         
-    chat_id = update.effective_chat.id
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    user_id = update.effective_user.id
+    display_name = update.effective_user.full_name
+    username = update.effective_user.username
+    args = context.args
+    
+    # Parse requested status
+    requested_status = None
+    if args:
+        joined_args = " ".join(args).strip().lower()
+        if joined_args in ["available"]:
+            requested_status = "available"
+        elif joined_args in ["no available", "no_available", "not_available", "no", "not"]:
+            requested_status = "no available"
+        else:
+            await update.message.reply_text(
+                "❌ Trạng thái không hợp lệ.\n"
+                "Vui lòng sử dụng:\n"
+                "• `/status available` để sẵn sàng làm việc\n"
+                "• `/status no available` để báo vắng mặt\n"
+                "• Hoặc chỉ gõ `/status` để tự động đổi qua lại.",
+                parse_mode="Markdown"
+            )
+            return
+
+    now_str = datetime.datetime.now().strftime("%H:%M %d/%m")
     
     async with db_session() as session:
-        # 1. Leaves
-        stmt_leave = select(LeaveRequest).where(
-            and_(
-                LeaveRequest.status == 'approved',
-                LeaveRequest.start_date <= today_str,
-                LeaveRequest.end_date >= today_str
+        # Get or create user
+        stmt = select(User).where(User.telegram_id == user_id)
+        res = await session.execute(stmt)
+        user = res.scalar_one_or_none()
+        
+        if not user:
+            # Register user
+            user = User(
+                telegram_id=user_id,
+                display_name=display_name,
+                username=username,
+                role='member',
+                status='available',
+                status_updated_at=now_str
             )
-        )
-        res_leave = await session.execute(stmt_leave)
-        leaves = res_leave.scalars().all()
+            session.add(user)
+            await session.flush()
+            
+        # Determine final status
+        if requested_status is None:
+            # Toggle logic
+            if user.status == "available":
+                final_status = "no available"
+            else:
+                final_status = "available"
+        else:
+            final_status = requested_status
+            
+        user.status = final_status
+        user.status_updated_at = now_str
         
-        # 2. Lunch Draw today
-        # Check if the last random member spin was today
-        stmt_lunch = select(SpinHistory).where(
-            SpinHistory.spin_type == 'random_member'
-        ).order_by(SpinHistory.id.desc()).limit(1)
-        res_lunch = await session.execute(stmt_lunch)
-        last_lunch = res_lunch.scalar_one_or_none()
+        # Log action
+        session.add(AuditLog(
+            actor_id=user_id,
+            action=f"update_status_{final_status.replace(' ', '_')}",
+            entity_type="users",
+            entity_id=user.id
+        ))
         
-        lunch_text = "🔴 Chưa chọn"
-        if last_lunch:
-            spin_date = last_lunch.created_at.split()[0] if last_lunch.created_at else ""
-            if spin_date == today_str:
-                lunch_text = f"🍱 **{last_lunch.result}**"
-                
-        # 3. Active Reminders today
-        stmt_remind = select(Reminder).where(
-            and_(
-                Reminder.chat_id == chat_id,
-                Reminder.active == True
-            )
-        )
-        res_remind = await session.execute(stmt_remind)
-        reminders = res_remind.scalars().all()
-        
-        today_reminders = []
-        dt = datetime.now()
-        day_name = dt.strftime("%A").lower()
-        is_weekend = dt.weekday() >= 5
-        
-        for r in reminders:
-            rule = r.schedule_rule
-            if rule.startswith("once_time:"):
-                parts = rule.split(":")
-                time_str = f"{parts[1]}:{parts[2]}"
-                today_reminders.append(f"⏰ `{time_str}` — **{r.title}** (Một lần)")
-            elif rule.startswith("once_date:"):
-                try:
-                    iso_str = rule.split(":", 1)[1]
-                    target_dt = datetime.fromisoformat(iso_str)
-                    if target_dt.strftime("%Y-%m-%d") == today_str:
-                        today_reminders.append(f"⏰ `{target_dt.strftime('%H:%M')}` — **{r.title}** (Một lần)")
-                except Exception:
-                    pass
-            elif rule.startswith("recurring:"):
-                parts = rule.split(":")
-                freq = parts[1]
-                time_str = f"{parts[2]}:{parts[3]}"
-                if freq == "daily" or (freq == "weekdays" and not is_weekend) or freq == day_name:
-                    today_reminders.append(f"📅 `{time_str}` — **{r.title}** (Định kỳ)")
-            elif rule.startswith("task_interval:"):
-                parts = rule.split(":")
-                time_str = f"{parts[2]}:{parts[3]}"
-                today_reminders.append(f"🧹 `{time_str}` — **{r.title}** (Định kỳ)")
-                
-        # 4. Open Tasks
-        stmt_task = select(Task).where(
-            and_(
-                Task.chat_id == chat_id,
-                Task.status == 'open'
-            )
-        )
-        res_task = await session.execute(stmt_task)
-        tasks = res_task.scalars().all()
-
-    # Formatting
-    leave_desc = ""
-    if leaves:
-        leave_desc = "\n".join([f"• **{l.user_name}** — {format_leave_type(l.leave_type)}" for l in leaves])
-    else:
-        leave_desc = "🟢 Hôm nay không có ai nghỉ phép."
-
-    reminder_desc = ""
-    if today_reminders:
-        today_reminders.sort()
-        reminder_desc = "\n".join(today_reminders)
-    else:
-        reminder_desc = "🟢 Không có nhắc nhở nào lên lịch hôm nay."
-
-    text = (
-        f"📊 **TRẠNG THÁI VĂN PHÒNG HÔM NAY** ({today_str})\n\n"
-        f"🏖 **Nghỉ phép hôm nay:**\n"
-        f"{leave_desc}\n\n"
-        f"🍱 **Phân công lấy cơm hôm nay:**\n"
-        f"👉 {lunch_text}\n\n"
-        f"🔔 **Lịch nhắc nhở hôm nay:**\n"
-        f"{reminder_desc}\n\n"
-        f"✅ **Task đang mở:** `{len(tasks)}` việc chờ xử lý."
+    status_emoji = "🟢" if final_status == "available" else "🔴"
+    await update.message.reply_text(
+        f"{status_emoji} Bạn đã cập nhật trạng thái hoạt động: **{final_status}** lúc `{now_str}`.",
+        parse_mode="Markdown"
     )
+
+async def handle_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Displays a list of all group members and their operational statuses."""
+    if not update.message:
+        return
+        
+    async with db_session() as session:
+        stmt = select(User).where(User.active == True).order_by(User.display_name.asc())
+        res = await session.execute(stmt)
+        users = res.scalars().all()
+        
+    if not users:
+        await update.message.reply_text("⚠️ Chưa có thành viên nào được lưu trong hệ thống.")
+        return
+        
+    available_list = []
+    not_available_list = []
+    
+    for u in users:
+        time_info = f" _(Cập nhật: {u.status_updated_at})_" if u.status_updated_at else ""
+        user_line = f"• **{u.display_name}**{time_info}"
+        
+        if u.status == "available":
+            available_list.append(user_line)
+        else:
+            not_available_list.append(user_line)
+            
+    text = "👥 **BẢNG TRẠNG THÁI THÀNH VIÊN VĂN PHÒNG**\n\n"
+    
+    text += "🟢 **Sẵn sàng (available):**\n"
+    if available_list:
+        text += "\n".join(available_list)
+    else:
+        text += "_Không có ai_"
+        
+    text += "\n\n🔴 **Vắng mặt (no available):**\n"
+    if not_available_list:
+        text += "\n".join(not_available_list)
+    else:
+        text += "_Không có ai_"
+        
+    text += "\n\n---\n💡 _Dùng lệnh `/status` hoặc `/status [available|no available]` để cập nhật trạng thái của bạn._"
     
     await update.message.reply_text(text, parse_mode="Markdown")

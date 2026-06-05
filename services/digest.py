@@ -2,10 +2,9 @@ from datetime import datetime
 from sqlalchemy import select, and_
 from models.leave import LeaveRequest
 from models.reminder import Reminder
-from models.task import Task
 
 async def build_daily_digest(session, chat_id: int, today_str: str) -> str:
-    """Builds a daily summary message for a specific group chat."""
+    """Builds a daily summary message for a specific group chat (Leaves and Reminders only)."""
     # 1. Fetch approved leave requests for today
     stmt_leave = select(LeaveRequest).where(
         and_(
@@ -40,12 +39,9 @@ async def build_daily_digest(session, chat_id: int, today_str: str) -> str:
             time_str = f"{parts[1]}:{parts[2]}"
             today_reminders.append((time_str, r.title))
         elif rule.startswith("once_date:"):
-            # If date is today, list it
-            # Format: once_date:ISOString
             try:
-                target_iso = rule.substring(10) if hasattr(rule, 'substring') else rule[10:]
+                target_iso = rule[10:]
                 target_dt = datetime.fromisoformat(target_iso.replace("Z", "+00:00"))
-                # If target date matches today (local date)
                 if target_dt.strftime("%Y-%m-%d") == today_str:
                     time_str = target_dt.strftime("%H:%M")
                     today_reminders.append((time_str, r.title))
@@ -55,7 +51,7 @@ async def build_daily_digest(session, chat_id: int, today_str: str) -> str:
             parts = rule.split(":")
             freq = parts[1]
             time_str = f"{parts[2]}:{parts[3]}"
-            if freq == "daily" or (freq == "weekdays" and not is_weekend):
+            if freq == "daily" or (freq == "weekdays" and not is_weekend) or freq == day_name:
                 today_reminders.append((time_str, r.title))
         elif rule.startswith("task_interval:"):
             parts = rule.split(":")
@@ -64,16 +60,6 @@ async def build_daily_digest(session, chat_id: int, today_str: str) -> str:
             
     # Sort reminders by time
     today_reminders.sort(key=lambda x: x[0])
-    
-    # 3. Fetch open tasks
-    stmt_task = select(Task).where(
-        and_(
-            Task.chat_id == chat_id,
-            Task.status == 'open'
-        )
-    )
-    res_task = await session.execute(stmt_task)
-    tasks = res_task.scalars().all()
     
     # Format weekday in Vietnamese
     days_vi = {
@@ -94,8 +80,10 @@ async def build_daily_digest(session, chat_id: int, today_str: str) -> str:
     # Leaves
     digest += "🏖 **Nghỉ phép:**\n"
     if leaves:
+        from handlers.leave_handler import format_leave_type
         for l in leaves:
-            digest += f"• {l.user_name} — {l.leave_type}\n"
+            type_str = format_leave_type(l.leave_type)
+            digest += f"• {l.user_name} — {type_str.lower()}\n"
     else:
         digest += "• Không có ai nghỉ phép hôm nay\n"
         
@@ -107,7 +95,4 @@ async def build_daily_digest(session, chat_id: int, today_str: str) -> str:
     else:
         digest += "• Không có lịch nhắc nhở nào\n"
         
-    # Tasks count
-    digest += f"\n✅ **Task đang mở:** {len(tasks)} việc chờ xử lý\n"
-    
     return digest

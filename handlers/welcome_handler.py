@@ -11,8 +11,8 @@ DEFAULT_WELCOME_MESSAGE = (
     "Gõ /help để xem các lệnh mình có thể giúp.\n\n"
     "🎲 Random phân công — /random\n"
     "🏖 Xin nghỉ phép — /xinnghi\n"
-    "📊 Vote nhanh — /vote\n"
-    "👏 Tặng kudos — /kudos"
+    "🟢 Trạng thái làm việc — /status\n"
+    "📊 Vote nhanh — /vote"
 )
 
 async def handle_welcome_config(update: Update, context: ContextTypes.DEFAULT_TYPE):

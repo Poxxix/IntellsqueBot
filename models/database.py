@@ -16,11 +16,12 @@ Base = declarative_base()
 
 async def init_db():
     # Import all models to ensure they register on Base.metadata
-    from models.user import User
+    from models.user import User, Setting
     from models.leave import LeaveRequest
-    from models.spin import SpinHistory, Kudos
+    from models.spin import SpinHistory, Reaction
     from models.reminder import Reminder
-    from models.task import Task
+    from models.info import InfoHub
+    from models.feedback import Feedback
     from models.audit import AuditLog
     
     async with engine.begin() as conn:

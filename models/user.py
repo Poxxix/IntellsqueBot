@@ -10,14 +10,14 @@ class User(Base):
     username = Column(String, nullable=True)
     role = Column(String, default='member')       # member | approver | admin | hr
     team = Column(String, nullable=True)
-    birthday = Column(String, nullable=True)        # DD/MM
-    joined_date = Column(String, nullable=True)     # DD/MM/YYYY
+    status = Column(String, default='available')   # available | no available
+    status_updated_at = Column(String, nullable=True)
     lunch_opt_in = Column(Boolean, default=True)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
 
     def __repr__(self):
-        return f"<User(display_name='{self.display_name}', role='{self.role}')>"
+        return f"<User(display_name='{self.display_name}', role='{self.role}', status='{self.status}')>"
 
 class Setting(Base):
     __tablename__ = 'settings'

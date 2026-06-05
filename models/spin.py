@@ -11,17 +11,6 @@ class SpinHistory(Base):
     created_by = Column(BigInteger, nullable=True)
     created_at = Column(String, default=func.datetime('now', 'localtime'))
 
-class Kudos(Base):
-    __tablename__ = 'kudos'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    giver_id = Column(BigInteger, nullable=False)
-    receiver_id = Column(BigInteger, nullable=True)
-    receiver_name = Column(String, nullable=True)
-    reason = Column(Text, nullable=True)
-    month = Column(String, nullable=False)          # YYYY-MM
-    created_at = Column(String, default=func.datetime('now', 'localtime'))
-
 class Reaction(Base):
     __tablename__ = 'reactions'
     

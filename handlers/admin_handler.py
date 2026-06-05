@@ -1,11 +1,10 @@
 import json
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from config import ADMIN_IDS
 from models.database import db_session
 from models.user import User, Setting
-from models.spin import Kudos
 from models.audit import AuditLog
 
 # Helper to check if caller is admin
@@ -33,12 +32,13 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         if not args:
             await update.message.reply_text(
-                "⚙️ **BẢNG ĐIỀU KHIỂN ADMIN (v2.0):**\n\n"
+                "⚙️ **BẢNG ĐIỀU KHIỂN ADMIN (v3.0):**\n\n"
                 "• `/admin members` - Xem danh sách và trạng thái thành viên.\n"
                 "• `/admin add_member @username display_name` - Thêm thủ công thành viên.\n"
-                "• `/admin remove_member @username` - Xóa thành viên khỏi pool random.\n"
-                "• `/admin set_approver @username` - Gán quyền duyệt nghỉ phép.\n"
-                "• `/admin reset kudos` - Xóa sạch kudos tháng hiện tại.\n"
+                "• `/admin remove_member @username` - Vô hiệu hóa (Inactive) thành viên.\n"
+                "• `/admin set_approver @username` - Gán quyền duyệt nghỉ phép (approver).\n"
+                "• `/admin add_admin <telegram_id>` - Thêm quyền Admin qua Telegram ID.\n"
+                "• `/admin remove_admin <telegram_id>` - Gỡ quyền Admin qua Telegram ID.\n"
                 "• `/admin broadcast <Nội dung>` - Gửi thông báo đến mọi group chat.",
                 parse_mode="Markdown"
             )
@@ -46,8 +46,14 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         subcmd = args[0].lower()
 
-        # 1. VIEW MEMBERS: /admin members
-        if subcmd == "members":
+        # 1. INFO HUB: /admin info
+        if subcmd == "info":
+            from handlers.info_handler import handle_admin_info
+            await handle_admin_info(update, context)
+            return
+
+        # 2. VIEW MEMBERS: /admin members
+        elif subcmd == "members":
             stmt = select(User).order_by(User.display_name.asc())
             res = await session.execute(stmt)
             users = res.scalars().all()
@@ -57,27 +63,24 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 username_str = f"(@{u.username})" if u.username else ""
                 lunch_str = "🍱 Cơm" if u.lunch_opt_in else "❌ Cơm"
                 active_str = "🟢 Active" if u.active else "🔴 Inactive"
+                status_emoji = "🟢" if u.status == "available" else "🔴"
                 text += f"{idx+1}. **{u.display_name}** {username_str}\n"
-                text += f"   • Quyền: `{u.role.upper()}` | {active_str} | {lunch_str}\n"
+                text += f"   • Quyền: `{u.role.upper()}` | {active_str} | Trạng thái: {status_emoji} `{u.status}`\n"
                 text += f"   • Telegram ID: `{u.telegram_id}`\n\n"
             await update.message.reply_text(text, parse_mode="Markdown")
 
         # 2. ADD MEMBER: /admin add_member @username display_name
-        elif subcommand := subcmd == "add_member":
+        elif subcmd == "add_member":
             if len(args) < 3 or not args[1].startswith("@"):
                 await update.message.reply_text("❌ Cú pháp sai. Hãy dùng: `/admin add_member @username Tên hiển thị` (Ví dụ: `/admin add_member @nguyena Nguyễn Văn A`).")
                 return
             username = args[1][1:].lower()
             display_name = " ".join(args[2:])
             
-            # Since we don't have their telegram_id yet, we create a placeholder ID
-            # Let's generate a temporary unique negative ID or ask them to start the bot
-            # To be safe, we let them know it's a placeholder till they start the bot
-            # Let's use a random unique big int
+            # Use negative placeholder ID until they connect
             import random as rand
             placeholder_id = -rand.randint(100000000, 999999999)
             
-            # Check if username exists
             stmt = select(User).where(User.username == username)
             res = await session.execute(stmt)
             if res.scalar_one_or_none():
@@ -150,31 +153,66 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ))
             await update.message.reply_text(f"✅ Đã gán quyền duyệt nghỉ phép (`APPROVER`) cho **{user.display_name}** (@{username}).")
 
-        # 5. RESET KUDOS: /admin reset kudos
-        elif subcmd == "reset" and len(args) > 1 and args[1].lower() == "kudos":
-            import datetime as dt
-            current_month = dt.datetime.now().strftime("%Y-%m")
+        # 5. ADD ADMIN: /admin add_admin <telegram_id>
+        elif subcmd == "add_admin":
+            if len(args) < 2 or not args[1].isdigit():
+                await update.message.reply_text("❌ Cú pháp sai. Hãy dùng: `/admin add_admin <telegram_id>` (Ví dụ: `/admin add_admin 123456789`).")
+                return
+            target_id = int(args[1])
             
-            # Delete all kudos in the current month
-            from sqlalchemy import delete
-            stmt_del = delete(Kudos).where(Kudos.month == current_month)
-            await session.execute(stmt_del)
+            stmt = select(User).where(User.telegram_id == target_id)
+            res = await session.execute(stmt)
+            user = res.scalar_one_or_none()
             
+            if not user:
+                await update.message.reply_text(f"❌ Không tìm thấy thành viên có Telegram ID {target_id} trong DB.")
+                return
+                
+            user.role = 'admin'
             session.add(AuditLog(
                 actor_id=user_id,
-                action="admin_reset_kudos",
-                meta_data=json.dumps({"month": current_month})
+                action="admin_add_admin",
+                entity_type="users",
+                entity_id=user.id
             ))
-            await update.message.reply_text(f"✅ Đã reset bảng vàng Kudos tháng hiện tại ({current_month}) thành công.")
+            await update.message.reply_text(f"✅ Đã cấp quyền ADMIN cho **{user.display_name}** (ID: `{target_id}`).")
 
-        # 6. BROADCAST: /admin broadcast <Nội dung>
+        # 6. REMOVE ADMIN: /admin remove_admin <telegram_id>
+        elif subcmd == "remove_admin":
+            if len(args) < 2 or not args[1].isdigit():
+                await update.message.reply_text("❌ Cú pháp sai. Hãy dùng: `/admin remove_admin <telegram_id>` (Ví dụ: `/admin remove_admin 123456789`).")
+                return
+            target_id = int(args[1])
+            
+            if target_id in ADMIN_IDS:
+                await update.message.reply_text("❌ Đây là Admin hệ thống cố định trong cấu hình, không thể gỡ quyền.")
+                return
+                
+            stmt = select(User).where(User.telegram_id == target_id)
+            res = await session.execute(stmt)
+            user = res.scalar_one_or_none()
+            
+            if not user:
+                await update.message.reply_text(f"❌ Không tìm thấy thành viên có Telegram ID {target_id} trong DB.")
+                return
+                
+            user.role = 'member'
+            session.add(AuditLog(
+                actor_id=user_id,
+                action="admin_remove_admin",
+                entity_type="users",
+                entity_id=user.id
+            ))
+            await update.message.reply_text(f"✅ Đã hạ quyền ADMIN của **{user.display_name}** (ID: `{target_id}`) về MEMBER.")
+
+        # 7. BROADCAST: /admin broadcast <Nội dung>
         elif subcmd == "broadcast":
             if len(args) < 2:
                 await update.message.reply_text("❌ Hãy điền nội dung tin nhắn cần phát.")
                 return
             content = update.message.text.split("broadcast", 1)[1].strip()
             
-            # Query all group chats
+            # Query all distinct group chats
             stmt_chats = select(Setting.chat_id).distinct()
             res_chats = await session.execute(stmt_chats)
             chat_ids = [c for c in res_chats.scalars().all() if c < 0] # only group chats
