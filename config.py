@@ -41,3 +41,4 @@ if os.name != 'nt': # Unix/Mac only
         pass
 
 DIGEST_TIME = os.getenv("DIGEST_TIME", "08:30")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

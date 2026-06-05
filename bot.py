@@ -1,7 +1,7 @@
 import os
 import sys
 import datetime
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -56,6 +56,7 @@ from handlers.dashboard_handler import (
     handle_pending,
     handle_dashboard_callback
 )
+from handlers.ai_handler import handle_ai_message
 
 # Import background jobs
 from services.scheduler import check_and_trigger_reminders_job
@@ -97,15 +98,41 @@ async def handle_track_member(update: Update, context: ContextTypes.DEFAULT_TYPE
                 user.username = username
 
 async def post_init(application) -> None:
-    """Post initialization for DB tables."""
+    """Post initialization for DB tables and suggested commands configuration."""
     await init_db()
+    
+    # Configure command suggestion menu for Telegram UI
+    commands = [
+        BotCommand("start", "Khởi động và giới thiệu bot"),
+        BotCommand("help", "Xem hướng dẫn và danh sách tất cả các lệnh"),
+        BotCommand("status", "Cập nhật trạng thái (available / no available)"),
+        BotCommand("team_status", "Xem bảng trạng thái hoạt động cả nhóm"),
+        BotCommand("xinnghi", "Đăng ký xin nghỉ phép (bảo mật lý do)"),
+        BotCommand("nghihomnay", "Xem danh sách người nghỉ hôm nay"),
+        BotCommand("huy_nghi", "Huỷ đơn xin nghỉ phép đang chờ duyệt"),
+        BotCommand("info", "Tra cứu thông tin nội bộ (ví dụ: /info wifi)"),
+        BotCommand("feedback", "Gửi góp ý ẩn danh đến Ban Quản trị (chỉ dùng trong DM)"),
+        BotCommand("random", "Chọn ngẫu nhiên 1 người đi lấy cơm/phân công"),
+        BotCommand("random_role", "Chia vai trò họp ngẫu nhiên"),
+        BotCommand("random_team", "Chia nhóm ngẫu nhiên"),
+        BotCommand("spin_history", "Xem lịch sử quay số phân công"),
+        BotCommand("vote", "Tạo cuộc bình chọn nhanh"),
+        BotCommand("react", "Tạo bảng 👍👎🤔 gắn vào tin nhắn được reply"),
+        BotCommand("remind", "Hẹn giờ nhắc việc"),
+        BotCommand("reminders", "Quản lý danh sách nhắc nhở"),
+        BotCommand("admin", "Lệnh quản trị hệ thống (Admin only)"),
+        BotCommand("dashboard", "Mở Admin Dashboard phím bấm (Admin DM)"),
+        BotCommand("pending", "Xem đơn nghỉ chờ duyệt (Admin/Approver DM)"),
+    ]
+    await application.bot.set_my_commands(commands)
+    print("Bot commands suggestion list configured successfully (v4.0 clean commands).")
 
 def main():
     if not BOT_TOKEN:
         print("ERROR: BOT_TOKEN is not defined in environment variables or .env file.")
         sys.exit(1)
         
-    print("Initializing Python Office Telegram Bot v2.0...")
+    print("Initializing Python Office Telegram Bot v4.0 (AI Edition)...")
     
     # Build Telegram Bot application
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
@@ -173,7 +200,10 @@ def main():
     # 5. Welcoming New Members Handler
     app.add_handler(ChatMemberHandler(handle_new_member, ChatMemberHandler.CHAT_MEMBER))
 
-    # 6. Configure JobQueue Scheduler
+    # 6. AI text conversation (mentions in group / text in DMs)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ai_message))
+
+    # 7. Configure JobQueue Scheduler
     jq = app.job_queue
     if jq:
         # Run every 60 seconds (check reminders and daily digests)
@@ -183,8 +213,8 @@ def main():
     else:
         print("WARNING: JobQueue is disabled. Background reminders and digests will not function.")
 
-    # 7. Start polling bot
-    print("🚀 Python Office Bot v3.0 is starting... Press Ctrl+C to stop.")
+    # 8. Start polling bot
+    print("🚀 Python Office Bot v4.0 (AI Edition) is starting... Press Ctrl+C to stop.")
     app.run_polling()
 
 if __name__ == '__main__':

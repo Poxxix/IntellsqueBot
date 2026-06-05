@@ -73,3 +73,63 @@ async def check_and_trigger_reminders_job(context: ContextTypes.DEFAULT_TYPE):
                     
                 if deactivate:
                     rem.active = False
+                    
+        # AI Auto Roast at 11:30 (Lunch check) and 14:00 (Status check)
+        from config import GEMINI_API_KEY
+        if GEMINI_API_KEY:
+            if current_time_str == "11:30":
+                from models.spin import SpinHistory
+                from models.user import Setting
+                stmt_spin = select(SpinHistory).where(
+                    and_(
+                        SpinHistory.spin_type == 'random_member',
+                        SpinHistory.created_at.like(f"{today_str}%")
+                    )
+                )
+                res_spin = await session.execute(stmt_spin)
+                spin_today = res_spin.scalars().first()
+                
+                if not spin_today:
+                    prompt = (
+                        "Đã 11:30 trưa rồi mà chưa có ai quay số đi lấy cơm hôm nay bằng lệnh /random cả. "
+                        "Hãy viết một tin nhắn nhắc nhở cực kỳ hài hước và cà khịa mọi người trong văn phòng vì tội lười biếng. "
+                        "Trả lời ngắn gọn dưới 2 câu."
+                    )
+                    from services.ai import generate_ai_response
+                    roast_msg = await generate_ai_response(prompt)
+                    
+                    stmt_chats = select(Setting.chat_id).distinct()
+                    res_chats = await session.execute(stmt_chats)
+                    chat_ids = [c for c in res_chats.scalars().all() if c < 0]
+                    for cid in chat_ids:
+                        try:
+                            await context.bot.send_message(chat_id=cid, text=f"🍱 {roast_msg}")
+                        except Exception:
+                            pass
+                            
+            elif current_time_str == "14:00":
+                from models.user import User, Setting
+                stmt_users = select(User).where(User.active == True)
+                res_users = await session.execute(stmt_users)
+                users = res_users.scalars().all()
+                
+                if users:
+                    not_available_users = [u for u in users if u.status == 'no available']
+                    pct = len(not_available_users) / len(users)
+                    if pct >= 0.5 or len(not_available_users) >= 3:
+                        prompt = (
+                            f"Hiện tại là 14:00 chiều. Có {len(not_available_users)} trên tổng số {len(users)} nhân sự "
+                            "đang để trạng thái 'no available' (vắng mặt/bận). Hãy viết một tin nhắn cà khịa cực kỳ lầy lội "
+                            "về việc cả nhóm đang trốn việc hoặc trốn sếp đi ngủ. Trả lời ngắn gọn dưới 2 câu."
+                        )
+                        from services.ai import generate_ai_response
+                        roast_msg = await generate_ai_response(prompt)
+                        
+                        stmt_chats = select(Setting.chat_id).distinct()
+                        res_chats = await session.execute(stmt_chats)
+                        chat_ids = [c for c in res_chats.scalars().all() if c < 0]
+                        for cid in chat_ids:
+                            try:
+                                await context.bot.send_message(chat_id=cid, text=f"💤 {roast_msg}")
+                            except Exception:
+                                pass

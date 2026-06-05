@@ -81,6 +81,7 @@ def get_dashboard_keyboard():
             InlineKeyboardButton("⚙️ Welcome Config", callback_data="dash_settings")
         ],
         [
+            InlineKeyboardButton("📝 Tóm tắt Feedback (AI)", callback_data="dash_feedback_ai"),
             InlineKeyboardButton("🔄 Làm Mới", callback_data="dash_refresh")
         ]
     ]
@@ -207,6 +208,53 @@ async def handle_dashboard_callback(update: Update, context: ContextTypes.DEFAUL
             f"Chọn một tùy chọn bên dưới để thực hiện quản trị:"
         )
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_dashboard_keyboard())
+        
+    elif data == "dash_feedback_ai":
+        from models.feedback import Feedback
+        from config import GEMINI_API_KEY
+        
+        async with db_session() as session:
+            stmt = select(Feedback).order_by(Feedback.id.desc()).limit(15)
+            res = await session.execute(stmt)
+            feedbacks = res.scalars().all()
+            
+        if not feedbacks:
+            keyboard = [[InlineKeyboardButton("⬅️ Quay lại", callback_data="dash_main")]]
+            await query.edit_message_text(
+                "🟢 **Chưa có góp ý ẩn danh nào trong cơ sở dữ liệu để tóm tắt.**",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+            
+        if not GEMINI_API_KEY:
+            keyboard = [[InlineKeyboardButton("⬅️ Quay lại", callback_data="dash_main")]]
+            await query.edit_message_text(
+                "🔌 **Trợ lý AI chưa được kích hoạt. Vui lòng thiết lập GEMINI_API_KEY để sử dụng tính năng này.**",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+            
+        fb_texts = []
+        for fb in feedbacks:
+            fb_texts.append(f"- [{fb.created_at}] Mã #{fb.id}: {fb.content}")
+        fb_context = "\n".join(fb_texts)
+        
+        prompt = (
+            "Dưới đây là danh sách các góp ý ẩn danh mới nhất của nhân viên trong tuần/tháng. "
+            "Hãy đóng vai Trợ lý Cây Hài Văn Phòng để viết một bản tóm tắt gửi riêng cho Sếp/Admin. "
+            "Yêu cầu bản tóm tắt phải cực kỳ vui nhộn, có phần 'Giải mã thái độ' (dịch ngôn ngữ văn phòng sang ý nghĩa thực tế một cách hài hước) "
+            "và phân loại độ giận dữ/độ khịa của nhân viên một cách lầy lội. Đừng làm lộ thông tin nhạy cảm của người gửi nếu có, và giữ đúng tinh thần của góp ý.\n\n"
+            "Danh sách góp ý:\n"
+            f"{fb_context}"
+        )
+        
+        await query.edit_message_text("🤖 Trợ lý AI đang nghiên cứu thái độ nhân viên và viết báo cáo cho Sếp...")
+        
+        from services.ai import generate_ai_response
+        response = await generate_ai_response(prompt)
+        
+        keyboard = [[InlineKeyboardButton("⬅️ Quay lại", callback_data="dash_main")]]
+        await query.message.reply_text(response, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
         
     elif data == "dash_pending":
         async with db_session() as session:

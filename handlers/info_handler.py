@@ -52,7 +52,20 @@ async def handle_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
             
-        text = f"ℹ️ **THÔNG TIN: {info.key.upper()}**\n\n{info.value}"
+        from config import GEMINI_API_KEY
+        if GEMINI_API_KEY:
+            from services.ai import generate_ai_response
+            prompt = (
+                f"Hãy diễn đạt lại thông tin nội bộ dưới đây của khóa '{info.key}' bằng giọng điệu "
+                f"hài hước, dí dỏm và cà khịa nhẹ của Trợ lý Cây Hài Văn Phòng. Giữ nguyên độ chính xác của các dữ liệu "
+                f"bên trong (như mật khẩu, địa chỉ, số tài khoản...):\n\n"
+                f"{info.value}"
+            )
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+            text = await generate_ai_response(prompt)
+        else:
+            text = f"ℹ️ **THÔNG TIN: {info.key.upper()}**\n\n{info.value}"
+            
         await update.message.reply_text(text, parse_mode="Markdown")
 
 async def handle_admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
