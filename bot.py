@@ -30,7 +30,7 @@ from handlers.random_handler import (
 from handlers.leave_handler import (
     handle_xinnghi,
     handle_nghihomnay,
-    handle_huy_nghi,
+    handle_cancel_leave,
     handle_leave_callback
 )
 from handlers.poll_handler import (
@@ -128,7 +128,7 @@ def main():
     # Leaves
     app.add_handler(CommandHandler("xinnghi", handle_xinnghi))
     app.add_handler(CommandHandler("nghihomnay", handle_nghihomnay))
-    app.add_handler(CommandHandler("huy_nghi", handle_huy_nghi))
+    app.add_handler(CommandHandler("huy_nghi", handle_cancel_leave))
     
     # Vote & React
     app.add_handler(CommandHandler("vote", handle_vote))
