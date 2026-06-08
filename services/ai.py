@@ -60,6 +60,7 @@ async def generate_ai_response(prompt: str, system_instruction: str = None) -> s
             
     # 2. Fallback search: try combinations of stable/beta and different model names
     models_to_try = [
+        "gemini-3.1-flash-lite",
         "gemini-1.5-flash-latest",
         "gemini-1.5-flash",
         "gemini-2.0-flash",
