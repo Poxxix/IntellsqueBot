@@ -94,6 +94,10 @@ async def handle_track_member(update: Update, context: ContextTypes.DEFAULT_TYPE
             session.add(new_user)
             print(f"Auto-tracked and registered new user: {display_name} ({user_id}) as {role}")
         else:
+            # Sync role to admin if they are in ADMIN_IDS
+            if user_id in ADMIN_IDS and user.role != 'admin':
+                user.role = 'admin'
+                print(f"Auto-promoted user: {display_name} ({user_id}) to admin (matches ADMIN_IDS).")
             # Sync display name and username if they changed
             if user.display_name != display_name or user.username != username:
                 user.display_name = display_name

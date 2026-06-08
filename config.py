@@ -9,12 +9,13 @@ if not BOT_TOKEN:
     # We will log it, but let's allow it to not crash import if creating schema
     BOT_TOKEN = ""
 
-admin_ids_raw = os.getenv("ADMIN_IDS", "")
+admin_ids_raw = os.getenv("ADMIN_IDS") or os.getenv("DEFAULT_ADMIN_IDS") or ""
 ADMIN_IDS = []
 for x in admin_ids_raw.split(","):
-    x_clean = x.strip()
+    x_clean = x.strip().strip("'\"")
     if x_clean.isdigit():
         ADMIN_IDS.append(int(x_clean))
+print(f"Loaded ADMIN_IDS: {ADMIN_IDS}")
 
 # Database connection conversion for async SQLAlchemy
 database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///office_bot.db")

@@ -25,13 +25,14 @@ async def handle_welcome_config(update: Update, context: ContextTypes.DEFAULT_TY
     args = context.args
     message_text = update.message.text
     
-    # Check permissions (must be admin/approver in db, or chat admin)
+    # Check permissions (must be admin/approver in db, or chat admin, or in ADMIN_IDS)
+    from config import ADMIN_IDS
     async with db_session() as session:
         stmt_u = select(User).where(User.telegram_id == user_id)
         res_u = await session.execute(stmt_u)
         db_user = res_u.scalar_one_or_none()
         
-    is_admin = db_user is not None and db_user.role == 'admin'
+    is_admin = (db_user is not None and db_user.role == 'admin') or (user_id in ADMIN_IDS)
     
     # Check if they are a chat administrator in Telegram
     try:
