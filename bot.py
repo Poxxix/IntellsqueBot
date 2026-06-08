@@ -31,7 +31,9 @@ from handlers.leave_handler import (
     handle_xinnghi,
     handle_nghihomnay,
     handle_cancel_leave,
-    handle_leave_callback
+    handle_leave_callback,
+    handle_phep,
+    handle_admin_phep
 )
 from handlers.poll_handler import (
     handle_vote,
@@ -110,6 +112,8 @@ async def post_init(application) -> None:
         BotCommand("xinnghi", "Đăng ký xin nghỉ phép (bảo mật lý do)"),
         BotCommand("nghihomnay", "Xem danh sách người nghỉ hôm nay"),
         BotCommand("huy_nghi", "Huỷ đơn xin nghỉ phép đang chờ duyệt"),
+        BotCommand("phep", "Xem ngày nghỉ phép còn lại của bạn"),
+        BotCommand("admin_phep", "Quản lý ngày nghỉ phép nhân viên (Admin only)"),
         BotCommand("info", "Tra cứu thông tin nội bộ (ví dụ: /info wifi)"),
         BotCommand("feedback", "Gửi góp ý ẩn danh đến Ban Quản trị (chỉ dùng trong DM)"),
         BotCommand("random", "Chọn ngẫu nhiên 1 người đi lấy cơm/phân công"),
@@ -156,6 +160,8 @@ def main():
     app.add_handler(CommandHandler("xinnghi", handle_xinnghi))
     app.add_handler(CommandHandler("nghihomnay", handle_nghihomnay))
     app.add_handler(CommandHandler("huy_nghi", handle_cancel_leave))
+    app.add_handler(CommandHandler("phep", handle_phep))
+    app.add_handler(CommandHandler("admin_phep", handle_admin_phep))
     
     # Vote & React
     app.add_handler(CommandHandler("vote", handle_vote))

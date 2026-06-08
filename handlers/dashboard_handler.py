@@ -241,14 +241,14 @@ async def handle_dashboard_callback(update: Update, context: ContextTypes.DEFAUL
         
         prompt = (
             "Dưới đây là danh sách các góp ý ẩn danh mới nhất của nhân viên trong tuần/tháng. "
-            "Hãy đóng vai Trợ lý Cây Hài Văn Phòng để viết một bản tóm tắt gửi riêng cho Sếp/Admin. "
-            "Yêu cầu bản tóm tắt phải cực kỳ vui nhộn, có phần 'Giải mã thái độ' (dịch ngôn ngữ văn phòng sang ý nghĩa thực tế một cách hài hước) "
-            "và phân loại độ giận dữ/độ khịa của nhân viên một cách lầy lội. Đừng làm lộ thông tin nhạy cảm của người gửi nếu có, và giữ đúng tinh thần của góp ý.\n\n"
+            "Hãy đóng vai Trợ lý Văn phòng chuyên nghiệp và nghiêm túc để viết một bản tóm tắt gửi riêng cho Ban Quản trị. "
+            "Yêu cầu bản tóm tắt phải lịch sự, khách quan, phân tích rõ các điểm cốt lõi của góp ý và đề xuất giải pháp xử lý phù hợp. "
+            "Tuyệt đối không pha trò, không dùng từ lóng, xưng hô là 'mình' và gọi người dùng là 'bạn'.\n\n"
             "Danh sách góp ý:\n"
             f"{fb_context}"
         )
         
-        await query.edit_message_text("🤖 Trợ lý AI đang nghiên cứu thái độ nhân viên và viết báo cáo cho Sếp...")
+        await query.edit_message_text("🤖 Trợ lý AI đang phân tích nội dung góp ý và soạn báo cáo...")
         
         from services.ai import generate_ai_response
         response = await generate_ai_response(prompt)

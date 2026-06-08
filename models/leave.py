@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, BigInteger, func
+from sqlalchemy import Column, Integer, String, BigInteger, Float, func
 from models.database import Base
 
 class LeaveRequest(Base):
@@ -14,6 +14,7 @@ class LeaveRequest(Base):
     status = Column(String, default='pending')   # pending | approved | rejected | cancelled
     approved_by = Column(String, nullable=True)  # Name of the approver
     chat_id = Column(BigInteger, nullable=True)  # Group chat ID where request was submitted
+    used_leave_days = Column(Float, default=0.0)
     created_at = Column(String, default=func.datetime('now', 'localtime'))
 
     def __repr__(self):

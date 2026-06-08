@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, Float, func
 from models.database import Base
 
 class User(Base):
@@ -15,6 +15,9 @@ class User(Base):
     lunch_opt_in = Column(Boolean, default=True)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
+    joined_date = Column(DateTime, nullable=True)
+    leave_balance = Column(Float, default=0.0)
+    total_accrued = Column(Integer, default=0)
 
     def __repr__(self):
         return f"<User(display_name='{self.display_name}', role='{self.role}', status='{self.status}')>"

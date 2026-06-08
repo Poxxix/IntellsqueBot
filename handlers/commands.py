@@ -60,8 +60,9 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/xinnghi` - Hiện menu xin nghỉ phép nhanh trong DM.\n"
         "• `/xinnghi sang|chieu|ngay YYYY-MM-DD [lý do]` - Đăng ký nghỉ ngày cụ thể.\n"
         "• `/xinnghi tu YYYY-MM-DD den YYYY-MM-DD [lý do]` - Đăng ký nghỉ nhiều ngày.\n"
-        "• `/nghihomnay` - Danh sách người nghỉ phép hôm nay (Lý do được ẩn).\n"
-        "• `/huy_nghi` - Hủy đơn nghỉ phép đang chờ duyệt (DM chỉ định).\n\n"
+        "• `/nghihomnay` - Danh sách người nghỉ hôm nay (Lý do được ẩn).\n"
+        "• `/huy_nghi` - Hủy đơn nghỉ phép đang chờ duyệt (DM chỉ định).\n"
+        "• `/phep` - Xem số ngày nghỉ phép còn lại của bạn (DM chỉ định).\n\n"
         "🟢 **3. Trạng thái hoạt động (Team Status):**\n"
         "• `/status` - Chuyển đổi qua lại giữa `available` và `no available`.\n"
         "• `/status available|no available` - Đặt trạng thái cụ thể.\n"
@@ -95,7 +96,8 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "\n\n⚙️ **Lệnh cho Admin:**\n"
             "• `/admin` - Bảng điều khiển admin qua dòng lệnh.\n"
             "• `/dashboard` - Bảng điều khiển Admin Dashboard dạng phím bấm trong DM.\n"
-            "• `/export nghi` - Xuất toàn bộ đơn nghỉ phép thành file CSV (DM Admin)."
+            "• `/export nghi` - Xuất toàn bộ đơn nghỉ phép thành file CSV (DM Admin).\n"
+            "• `/admin_phep` - Xem và quản trị ngày nghỉ phép nhân viên."
         )
         
     await update.message.reply_text(text, parse_mode="Markdown")
