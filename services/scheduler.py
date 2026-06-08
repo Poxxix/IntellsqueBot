@@ -75,8 +75,8 @@ async def check_and_trigger_reminders_job(context: ContextTypes.DEFAULT_TYPE):
                     rem.active = False
                     
         # AI Auto Roast at 11:30 (Lunch check) and 14:00 (Status check)
-        from config import GEMINI_API_KEY
-        if GEMINI_API_KEY:
+        from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+        if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
             if current_time_str == "11:30":
                 from models.spin import SpinHistory
                 from models.user import Setting

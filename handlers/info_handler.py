@@ -52,8 +52,8 @@ async def handle_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
             
-        from config import GEMINI_API_KEY
-        if GEMINI_API_KEY:
+        from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+        if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
             from services.ai import generate_ai_response
             prompt = (
                 f"Hãy diễn đạt lại thông tin nội bộ dưới đây của khóa '{info.key}' bằng giọng điệu "
