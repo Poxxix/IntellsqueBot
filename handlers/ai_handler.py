@@ -22,19 +22,36 @@ async def build_info_context() -> str:
     return "\n".join(context_lines)
 
 async def handle_ai_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles messages in group chats where the bot is mentioned/tagged."""
+    """Handles messages in group chats where the bot is mentioned/tagged or replied to."""
     if not update.message or not update.message.text:
         return
         
     message_text = update.message.text
-    bot_username = context.bot.username
     
-    # Check if the bot was mentioned
-    if f"@{bot_username}" not in message_text:
+    bot_username = context.bot.username
+    if not bot_username:
+        try:
+            bot_info = await context.bot.get_me()
+            bot_username = bot_info.username
+        except Exception as e:
+            print(f"Error fetching bot username: {e}")
+            return
+            
+    # Check if the bot was mentioned (case-insensitive) or if it's a reply to the bot
+    is_mentioned = False
+    if bot_username and f"@{bot_username.lower()}" in message_text.lower():
+        is_mentioned = True
+    elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+        is_mentioned = True
+        
+    if not is_mentioned:
         return
         
     # Clean the prompt by removing the bot mention
-    clean_prompt = re.sub(rf"@{bot_username}", "", message_text, flags=re.IGNORECASE).strip()
+    clean_prompt = message_text
+    if bot_username:
+        clean_prompt = re.sub(rf"@{bot_username}", "", clean_prompt, flags=re.IGNORECASE).strip()
+        
     if not clean_prompt:
         await update.message.reply_text("🤡 Tag em làm gì đấy sếp ơi? Gõ gì đó đi em mới trả lời được chứ! 🧐")
         return
