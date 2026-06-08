@@ -7,7 +7,7 @@ from models.info import InfoHub
 from services.ai import generate_ai_response
 
 async def build_info_context() -> str:
-    """Helper to retrieve all Info Hub entries as context for AWS Bedrock."""
+    """Helper to retrieve all Info Hub entries as context for Gemini."""
     async with db_session() as session:
         stmt = select(InfoHub)
         res = await session.execute(stmt)

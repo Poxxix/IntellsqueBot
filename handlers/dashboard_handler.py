@@ -211,7 +211,7 @@ async def handle_dashboard_callback(update: Update, context: ContextTypes.DEFAUL
         
     elif data == "dash_feedback_ai":
         from models.feedback import Feedback
-        from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+        from config import GEMINI_API_KEY
         
         async with db_session() as session:
             stmt = select(Feedback).order_by(Feedback.id.desc()).limit(15)
@@ -226,10 +226,10 @@ async def handle_dashboard_callback(update: Update, context: ContextTypes.DEFAUL
             )
             return
             
-        if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+        if not GEMINI_API_KEY:
             keyboard = [[InlineKeyboardButton("⬅️ Quay lại", callback_data="dash_main")]]
             await query.edit_message_text(
-                "🔌 **Trợ lý AI chưa được kích hoạt. Vui lòng thiết lập AWS_ACCESS_KEY_ID và AWS_SECRET_ACCESS_KEY trên Railway để sử dụng tính năng này.**",
+                "🔌 **Trợ lý AI chưa được kích hoạt. Vui lòng thiết lập GEMINI_API_KEY để sử dụng tính năng này.**",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return

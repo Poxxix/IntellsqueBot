@@ -1,12 +1,5 @@
-import json
-import boto3
-import asyncio
-from config import (
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
-    AWS_REGION,
-    AWS_BEDROCK_MODEL_ID
-)
+import httpx
+from config import GEMINI_API_KEY
 
 DEFAULT_SYSTEM_INSTRUCTION = (
     "Bạn là Trợ lý số hóa \"Cây Hài Văn Phòng\" của một nhóm văn phòng trẻ trung, vui nhộn. "
@@ -17,61 +10,52 @@ DEFAULT_SYSTEM_INSTRUCTION = (
     "Hãy trả lời ngắn gọn (không quá 2-4 câu ngắn đối với các câu chat thông thường) để tránh làm loãng group chat."
 )
 
-def _call_bedrock_sync(prompt: str, system_instruction: str = None) -> str:
-    """Synchronous function to invoke AWS Bedrock (Claude 3.5 Sonnet)."""
-    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+async def generate_ai_response(prompt: str, system_instruction: str = None) -> str:
+    """Calls Gemini API asynchronously using httpx."""
+    if not GEMINI_API_KEY:
         return (
             "🔌 Sếp ơi, Trợ lý AI chưa được 'cắm điện'! "
-            "Vui lòng cấu hình các biến môi trường AWS (`AWS_ACCESS_KEY_ID` & `AWS_SECRET_ACCESS_KEY`) trên Railway nhé 🤪."
+            "Vui lòng cấu hình `GEMINI_API_KEY` trong file `.env` để kích hoạt nhé 🤪."
         )
         
-    try:
-        # Initialize boto3 client
-        client = boto3.client(
-            service_name="bedrock-runtime",
-            region_name=AWS_REGION,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
-        )
-        
-        # Payload structure for Claude 3 Messages API on AWS Bedrock
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1024,
-            "system": system_instruction or DEFAULT_SYSTEM_INSTRUCTION,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ]
-                }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "systemInstruction": {
+            "parts": [
+                {"text": system_instruction or DEFAULT_SYSTEM_INSTRUCTION}
             ]
-        })
-        
-        # Invoke model
-        response = client.invoke_model(
-            modelId=AWS_BEDROCK_MODEL_ID,
-            contentType="application/json",
-            accept="application/json",
-            body=body
-        )
-        
-        # Parse response
-        response_body = json.loads(response.get("body").read())
-        content = response_body.get("content", [])
-        if content and content[0].get("type") == "text":
-            return content[0].get("text", "").strip()
+        }
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
             
-        return "🤪 Ối, Claude 3.5 Sonnet trả về kết quả rỗng tuếch sếp ạ!"
-        
+            if response.status_code == 200:
+                data = response.json()
+                # Extract text response from Gemini API structure
+                candidates = data.get("candidates", [])
+                if candidates:
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    if parts:
+                        return parts[0].get("text", "").strip()
+                return "🤪 Ối, Gemini trả về kết quả rỗng tuếch sếp ạ!"
+            else:
+                print(f"Gemini API Error Status: {response.status_code}, Body: {response.text}")
+                return f"💀 Huhu sếp ơi, Gemini API báo lỗi rồi: {response.status_code}. Em đi ngủ đây! 🛌"
     except Exception as e:
-        print(f"Exception during AWS Bedrock API call: {e}")
-        return f"💀 Huhu sếp ơi, AWS Bedrock báo lỗi rồi: {str(e)[:150]}. Em đi ngủ đây! 🛌"
-
-async def generate_ai_response(prompt: str, system_instruction: str = None) -> str:
-    """Asynchronously calls AWS Bedrock using asyncio.to_thread to prevent blocking the event loop."""
-    return await asyncio.to_thread(_call_bedrock_sync, prompt, system_instruction)
+        print(f"Exception during Gemini API call: {e}")
+        return "🧠 Đầu óc em đang bị chập mạch rồi sếp ạ! (Network/Timeout Error) 🤪"
