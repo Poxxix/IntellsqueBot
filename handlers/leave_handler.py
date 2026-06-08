@@ -177,14 +177,21 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     if not args:
         if is_group:
-            # If in group, send instruction and ask them to check DM
-            await update.message.reply_text("🏖 Vui lòng kiểm tra tin nhắn riêng (DM) với Bot để gửi đơn xin nghỉ nhanh.")
+            # Get bot username for direct DM link
+            bot_info = await context.bot.get_me()
+            bot_username = bot_info.username
+            
+            # Send instruction and direct link to DM
+            await update.message.reply_text(
+                f"🏖 Vui lòng nhấn vào [liên kết này](https://t.me/{bot_username}) để mở chat riêng với Bot và gửi đơn xin nghỉ nhanh.",
+                parse_mode="Markdown"
+            )
             
             # Send the menu to DM
             try:
                 await send_quick_menu(context.bot, user_id)
             except Exception:
-                await update.message.reply_text("⚠️ Bot không thể nhắn tin riêng cho bạn. Vui lòng mở chat với Bot và gõ `/start` trước.")
+                pass
         else:
             # If in private chat, send the quick menu directly
             await send_quick_menu(context.bot, user_id)
@@ -198,21 +205,27 @@ async def handle_xinnghi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reason = ""
 
     if first_arg == "tu":
-        if len(args) < 4 or args[2].lower() != "den":
-            await update.message.reply_text("❌ Cú pháp sai. Hãy dùng: `/xinnghi tu YYYY-MM-DD den YYYY-MM-DD [lý do]`")
+        if len(args) < 5 or args[2].lower() != "den":
+            await update.message.reply_text("❌ Cú pháp sai. Hãy dùng: `/xinnghi tu YYYY-MM-DD den YYYY-MM-DD <lý do>`")
             return
         start_date = args[1]
         end_date = args[3]
         leave_type = "nhieu_ngay"
-        reason = " ".join(args[4:])
+        reason = " ".join(args[4:]).strip()
+        if not reason:
+            await update.message.reply_text("❌ Vui lòng điền lý do xin nghỉ phép.")
+            return
     elif first_arg in ["sang", "chieu", "ngay"]:
-        if len(args) < 2:
-            await update.message.reply_text(f"❌ Cú pháp sai. Hãy dùng: `/xinnghi {first_arg} YYYY-MM-DD [lý do]`")
+        if len(args) < 3:
+            await update.message.reply_text(f"❌ Cú pháp sai. Hãy dùng: `/xinnghi {first_arg} YYYY-MM-DD <lý do>`")
             return
         start_date = args[1]
         end_date = args[1]
         leave_type = first_arg
-        reason = " ".join(args[2:])
+        reason = " ".join(args[2:]).strip()
+        if not reason:
+            await update.message.reply_text("❌ Vui lòng điền lý do xin nghỉ phép.")
+            return
     else:
         await update.message.reply_text("❌ Loại nghỉ không hợp lệ. Hãy dùng `sang`, `chieu`, `ngay`, hoặc `tu`.")
         return
@@ -518,11 +531,10 @@ async def handle_leave_callback(update: Update, context: ContextTypes.DEFAULT_TY
             'leave_type': leave_type,
             'start_date': date_str,
             'end_date': date_str,
-            'reason': "Gửi nhanh bằng nút bấm",
             'chat_id': chat_id
         }
-        
-        await send_leave_confirm_menu(context.bot, user_id, details, context, query=query)
+        context.user_data['pending_leave_req'] = details
+        await query.edit_message_text("💬 **Vui lòng nhập lý do xin nghỉ phép của bạn:**\n(Hãy gửi tin nhắn chứa lý do xin nghỉ vào đây)", parse_mode="Markdown")
         return
 
     elif action in ["leave_approve", "leave_reject"]:

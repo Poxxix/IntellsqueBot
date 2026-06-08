@@ -85,6 +85,19 @@ async def handle_ai_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text.startswith('/'):
         return
         
+    # Check if there is a pending leave request waiting for a reason
+    pending = context.user_data.get('pending_leave_req')
+    if pending and 'reason' not in pending:
+        reason_text = update.message.text.strip()
+        if not reason_text:
+            await update.message.reply_text("❌ Lý do không được để trống. Vui lòng nhập lý do xin nghỉ:")
+            return
+        pending['reason'] = reason_text
+        context.user_data['pending_leave_req'] = pending
+        from handlers.leave_handler import send_leave_confirm_menu
+        await send_leave_confirm_menu(context.bot, update.effective_user.id, pending, context)
+        return
+        
     user_prompt = update.message.text.strip()
     info_context = await build_info_context()
     
