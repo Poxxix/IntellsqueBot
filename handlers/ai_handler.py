@@ -53,16 +53,16 @@ async def handle_ai_mention(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clean_prompt = re.sub(rf"@{bot_username}", "", clean_prompt, flags=re.IGNORECASE).strip()
         
     if not clean_prompt:
-        await update.message.reply_text("🤡 Tag em làm gì đấy sếp ơi? Gõ gì đó đi em mới trả lời được chứ! 🧐")
+        await update.message.reply_text("💼 Dạ sếp ơi, em có thể hỗ trợ gì cho sếp ạ? Sếp vui lòng nhập nội dung cần hỏi nhé! 😉")
         return
         
     # Build prompt with Info Hub context
     info_context = await build_info_context()
     
     full_prompt = (
-        "Hãy đóng vai Trợ lý Cây Hài Văn Phòng. "
+        "Hãy đóng vai Trợ lý Văn phòng chuyên nghiệp và dí dỏm. "
         "Sử dụng thông tin nội bộ của văn phòng dưới đây (nếu có liên quan) để trả lời câu hỏi của người dùng. "
-        "Nếu câu hỏi không liên quan đến thông tin nội bộ, hãy trả lời tự do theo phong cách hài hước và cà khịa thường ngày.\n\n"
+        "Nếu câu hỏi không liên quan đến thông tin nội bộ, hãy trả lời một cách lịch sự, chuyên nghiệp nhưng lồng ghép pha trò nhẹ nhàng, tinh tế.\n\n"
         "--- THÔNG TIN NỘI BỘ VĂN PHÒNG ---\n"
         f"{info_context}\n"
         "------------------------------------\n\n"
@@ -89,9 +89,9 @@ async def handle_ai_dm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_context = await build_info_context()
     
     full_prompt = (
-        "Hãy đóng vai Trợ lý Cây Hài Văn Phòng. "
+        "Hãy đóng vai Trợ lý Văn phòng chuyên nghiệp và dí dỏm. "
         "Người dùng đang chat riêng (DM) với bạn. Sử dụng thông tin nội bộ của văn phòng dưới đây (nếu có liên quan) để trả lời. "
-        "Nếu không liên quan, trả lời tự do theo cách lầy lội, hài hước.\n\n"
+        "Nếu không liên quan, hãy trả lời một cách lịch sự, chuyên nghiệp nhưng lồng ghép pha trò nhẹ nhàng, tinh tế.\n\n"
         "--- THÔNG TIN NỘI BỘ VĂN PHÒNG ---\n"
         f"{info_context}\n"
         "------------------------------------\n\n"
