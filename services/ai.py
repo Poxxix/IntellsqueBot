@@ -55,7 +55,7 @@ async def generate_ai_response(prompt: str, system_instruction: str = None) -> s
                 return "🤪 Ối, Gemini trả về kết quả rỗng tuếch sếp ạ!"
             else:
                 print(f"Gemini API Error Status: {response.status_code}, Body: {response.text}")
-                return f"💀 Huhu sếp ơi, Gemini API báo lỗi rồi: {response.status_code}. Em đi ngủ đây! 🛌"
+                return f"💀 Huhu sếp ơi, Gemini API báo lỗi rồi: {response.status_code}.\nChi tiết: `{response.text[:300]}`\nEm đi ngủ đây! 🛌"
     except Exception as e:
         print(f"Exception during Gemini API call: {e}")
-        return "🧠 Đầu óc em đang bị chập mạch rồi sếp ạ! (Network/Timeout Error) 🤪"
+        return f"🧠 Đầu óc em đang bị chập mạch rồi sếp ạ! Lỗi: {str(e)[:150]} 🤪"
