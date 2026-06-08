@@ -57,7 +57,7 @@ async def handle_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from services.ai import generate_ai_response
             prompt = (
                 f"Hãy diễn đạt lại thông tin nội bộ dưới đây của khóa '{info.key}' bằng giọng điệu "
-                f"hài hước, dí dỏm và cà khịa nhẹ của Trợ lý Cây Hài Văn Phòng. Giữ nguyên độ chính xác của các dữ liệu "
+                f"lịch sự, nghiêm túc và chuyên nghiệp. Giữ nguyên độ chính xác của các dữ liệu "
                 f"bên trong (như mật khẩu, địa chỉ, số tài khoản...):\n\n"
                 f"{info.value}"
             )

@@ -92,8 +92,8 @@ async def check_and_trigger_reminders_job(context: ContextTypes.DEFAULT_TYPE):
                 if not spin_today:
                     prompt = (
                         "Đã 11:30 trưa rồi mà chưa có ai quay số đi lấy cơm hôm nay bằng lệnh /random cả. "
-                        "Hãy viết một tin nhắn nhắc nhở cực kỳ hài hước và cà khịa mọi người trong văn phòng vì tội lười biếng. "
-                        "Trả lời ngắn gọn dưới 2 câu."
+                        "Hãy viết một tin nhắn nhắc nhở lịch sự và nghiêm túc để nhắc mọi người trong văn phòng quay số đi lấy cơm. "
+                        "Tuyệt đối không pha trò, không dùng từ lóng, xưng là 'mình' và gọi người nhận là 'bạn'. Trả lời ngắn gọn dưới 2 câu."
                     )
                     from services.ai import generate_ai_response
                     roast_msg = await generate_ai_response(prompt)
@@ -119,8 +119,8 @@ async def check_and_trigger_reminders_job(context: ContextTypes.DEFAULT_TYPE):
                     if pct >= 0.5 or len(not_available_users) >= 3:
                         prompt = (
                             f"Hiện tại là 14:00 chiều. Có {len(not_available_users)} trên tổng số {len(users)} nhân sự "
-                            "đang để trạng thái 'no available' (vắng mặt/bận). Hãy viết một tin nhắn cà khịa cực kỳ lầy lội "
-                            "về việc cả nhóm đang trốn việc hoặc trốn sếp đi ngủ. Trả lời ngắn gọn dưới 2 câu."
+                            "đang để trạng thái 'no available' (vắng mặt/bận). Hãy viết một tin nhắn thông báo lịch sự, nghiêm túc "
+                            "để nhắc nhở mọi người cập nhật lại trạng thái làm việc khi rảnh. Tuyệt đối không pha trò, không dùng từ lóng, xưng là 'mình' và gọi người nhận là 'bạn'. Trả lời ngắn gọn dưới 2 câu."
                         )
                         from services.ai import generate_ai_response
                         roast_msg = await generate_ai_response(prompt)
